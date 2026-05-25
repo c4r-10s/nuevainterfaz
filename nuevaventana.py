@@ -83,27 +83,24 @@ def salir():
 
 def nueva_evidencia():
 
-    global ruta_archivo
+    global ruta_archivo, modo_edicion
+
+    modo_edicion = False  
+    bloquear_campos(True) 
 
     combo_tipo.set("")
-
     entry_nombre.delete(0, tk.END)
-
     txt_descripcion.delete("1.0", tk.END)
 
     entry_fecha.config(state="normal")
-
     entry_fecha.delete(0, tk.END)
-
     entry_fecha.insert(
         0,
         datetime.now().strftime("%d/%m/%Y")
     )
-
     entry_fecha.config(state="readonly")
 
     ruta_archivo = ""
-
     lbl_archivo.config(text="Sin archivo")
 
 
@@ -139,15 +136,23 @@ def cargar_archivo():
 
 def aceptar():
 
-    global contador_id
-    global ruta_archivo
+    global contador_id, ruta_archivo, modo_edicion
 
     tipo = combo_tipo.get()
     nombre = entry_nombre.get()
     fecha = entry_fecha.get()
     descripcion = txt_descripcion.get("1.0", tk.END).strip()
 
-    # VALIDACIÓN COMPLETA
+    # 1. CANDADO NUEVO: Evitar guardar si está seleccionado un registro pero NO está en modo edición
+    seleccionado = tabla.selection()
+    if seleccionado and not modo_edicion:
+        messagebox.showwarning(
+            "Registro Existente", 
+            "Esta evidencia ya se encuentra registrada.\n\nSi deseas modificarla, presiona primero el botón 'Modificar'."
+        )
+        return
+
+    # 2. VALIDACIÓN: Campos vacíos
     if tipo == "" or nombre.strip() == "" or descripcion == "" or ruta_archivo == "":
         messagebox.showwarning(
             "Campos incompletos",
@@ -155,24 +160,51 @@ def aceptar():
         )
         return
 
-    tabla.insert(
-        "",
-        "end",
-        values=(
-            contador_id,
-            nombre,
-            tipo,
-            fecha,
-            descripcion,
-            ruta_archivo
+    # 3. VALIDACIÓN: Tipo de archivo correcto
+    if not validar_archivo(tipo, ruta_archivo):
+        messagebox.showerror(
+            "Inconsistencia de archivo",
+            f"El archivo actual ({os.path.basename(ruta_archivo)}) no coincide con el tipo seleccionado ({tipo}).\n\nPor favor, cargue el archivo correcto antes de guardar."
         )
-    )
+        return  
 
-    contador_id += 1
+    # LÓGICA DE ACTUALIZACIÓN O REGISTRO NUEVO
+    if modo_edicion:
+        if seleccionado:
+            valores_actuales = tabla.item(seleccionado)["values"]
+            
+            tabla.item(
+                seleccionado,
+                values=(
+                    valores_actuales[0],  
+                    nombre,
+                    tipo,
+                    fecha,
+                    descripcion,
+                    ruta_archivo
+                )
+            )
+            messagebox.showinfo("Correcto", "Evidencia modificada correctamente")
+    else:
+        # Crea un nuevo registro normal si no hay nada seleccionado
+        tabla.insert(
+            "",
+            "end",
+            values=(
+                contador_id,
+                nombre,
+                tipo,
+                fecha,
+                descripcion,
+                ruta_archivo
+            )
+        )
+        contador_id += 1
+        messagebox.showinfo("Correcto", "Evidencia registrada correctamente")
 
-    messagebox.showinfo("Correcto", "Evidencia registrada correctamente")
-
+    modo_edicion = False
     nueva_evidencia()
+
 
 def eliminar():
 
@@ -198,77 +230,31 @@ def eliminar():
     if confirmar2:
         tabla.delete(seleccionado)
         messagebox.showinfo("Eliminado", "Registro eliminado correctamente")
+        nueva_evidencia()
 
 
 def cargar_datos(event):
 
+    global ruta_archivo, modo_edicion
     seleccionado = tabla.selection()
 
     if seleccionado:
-
+        # Al hacer clic en la tabla, el modo edición se desactiva por seguridad
+        modo_edicion = False 
+        
         datos = tabla.item(seleccionado)["values"]
+
+        entry_nombre.config(state="normal")
+        txt_descripcion.config(state="normal")
+        entry_fecha.config(state="normal")
 
         entry_nombre.delete(0, tk.END)
         entry_nombre.insert(0, datos[1])
 
         combo_tipo.set(datos[2])
 
-        entry_fecha.config(state="normal")
-
-        entry_fecha.delete(0, tk.END)
-
-        entry_fecha.insert(0, datos[3])
-
-        entry_fecha.config(state="readonly")
-
-        txt_descripcion.delete("1.0", tk.END)
-
-        txt_descripcion.insert("1.0", datos[4])
-
-        lbl_archivo.config(
-            text=os.path.basename(str(datos[5]))
-        )
-
-def bloquear_campos(estado):
-
-    if estado:
-        entry_nombre.config(state="normal")
-        txt_descripcion.config(state="normal")
-        combo_tipo.config(state="readonly")
-    else:
-        entry_nombre.config(state="disabled")
-        txt_descripcion.config(state="disabled")
-        combo_tipo.config(state="readonly")
-    
-def modificar():
-
-    global modo_edicion
-    global ruta_archivo
-
-    seleccionado = tabla.selection()
-
-    if not seleccionado:
-        messagebox.showwarning("Atención", "Selecciona un registro")
-        return
-
-    # ESTO ACTIVA EDICION
-    if not modo_edicion:
-
-        datos = tabla.item(seleccionado)["values"]
-
-        entry_nombre.config(state="normal")
-        txt_descripcion.config(state="normal")
-        combo_tipo.config(state="readonly")
-
-        entry_nombre.delete(0, tk.END)
-        entry_nombre.insert(0, datos[1])
-
-        combo_tipo.set(datos[2])
-
-        entry_fecha.config(state="normal")
         entry_fecha.delete(0, tk.END)
         entry_fecha.insert(0, datos[3])
-        entry_fecha.config(state="readonly")
 
         txt_descripcion.delete("1.0", tk.END)
         txt_descripcion.insert("1.0", datos[4])
@@ -276,42 +262,38 @@ def modificar():
         ruta_archivo = datos[5]
         lbl_archivo.config(text=os.path.basename(str(datos[5])))
 
-        bloquear_campos(True)
+        bloquear_campos(False)
+        entry_fecha.config(state="disabled") 
 
-        modo_edicion = True
 
-        messagebox.showinfo("Edición", "Ahora puedes modificar los campos")
+def bloquear_campos(estado):
 
+    if estado:
+        entry_nombre.config(state="normal")
+        txt_descripcion.config(state="normal")
+        combo_tipo.config(state="readonly")
+        btn_cargar.config(state="normal")
+    else:
+        entry_nombre.config(state="disabled")
+        txt_descripcion.config(state="disabled")
+        combo_tipo.config(state="disabled")
+        btn_cargar.config(state="disabled")
+    
+def modificar():
+
+    global modo_edicion
+
+    seleccionado = tabla.selection()
+
+    if not seleccionado:
+        messagebox.showwarning("Atención", "Selecciona un registro de la tabla")
         return
 
-    # GUARDAR CAMBIOS
-    tipo = combo_tipo.get()
-    nombre = entry_nombre.get()
-    fecha = entry_fecha.get()
-    descripcion = txt_descripcion.get("1.0", tk.END).strip()
+    bloquear_campos(True)
+    modo_edicion = True
 
-    if tipo == "" or nombre.strip() == "" or descripcion == "" or ruta_archivo == "":
-        messagebox.showwarning("Campos incompletos", "Completa todos los campos")
-        return
+    messagebox.showinfo("Edición", "Ahora puedes modificar los campos. Presiona 'Aceptar' para guardar los cambios.")
 
-    valores_actuales = tabla.item(seleccionado)["values"]
-
-    tabla.item(
-        seleccionado,
-        values=(
-            valores_actuales[0],
-            nombre,
-            tipo,
-            fecha,
-            descripcion,
-            ruta_archivo
-        )
-    )
-
-    bloquear_campos(False)
-    modo_edicion = False
-
-    messagebox.showinfo("Correcto", "Registro actualizado")
     
 def validar_archivo(tipo, archivo):
 
@@ -746,6 +728,6 @@ entry_fecha.insert(
 
 entry_fecha.config(state="readonly")
 
-bloquear_campos(False)
+bloquear_campos(True)
 
 ventana.mainloop()
