@@ -8,19 +8,17 @@ import os
 # ==========================================
 class Evidencias:
     def __init__(self):
-        # Datos iniciales simulados para que el Tutor tenga registros que revisar y graficar
-        self.array_dinamico = [
-        ]
+        self.array_dinamico = []
 
     def existe_id(self, id_evidencia):
         return any(reg["IDevidencia"] == id_evidencia for reg in self.array_dinamico)
 
-    def incluir_evidencia(self, id_evidencia, nombre, fecha_carga, descripcion, archivo):
+    def incluir_evidencia(self, id_evidencia, id_estudiante, nombre_estudiante, nombre_evidencia, fecha_carga, descripcion, archivo):
         nuevo_registro = {
             "IDevidencia": id_evidencia,
-            "IDestudiante": 100 + id_evidencia,  # Simulación de ID de estudiante asignado
-            "NombreEstudiante": f"Estudiante {100 + id_evidencia}",
-            "NombreEvidencia": nombre,
+            "IDestudiante": id_estudiante,
+            "NombreEstudiante": nombre_estudiante,
+            "NombreEvidencia": nombre_evidencia,
             "FechadeCarga": fecha_carga,
             "Descripcion": descripcion,
             "calificacion": 0.0,
@@ -31,20 +29,22 @@ class Evidencias:
         }
         self.array_dinamico.append(nuevo_registro)
 
-    def modificar_registro(self, id_evidencia, nombre, fecha_carga, descripcion, archivo):
+    def modificar_registro(self, id_evidencia, id_estudiante, nombre_estudiante, nombre_evidencia, fecha_carga, descripcion, archivo):
         for registro in self.array_dinamico:
             if registro["IDevidencia"] == id_evidencia:
-                registro["NombreEvidencia"] = nombre
+                registro["IDestudiante"] = id_estudiante
+                registro["NombreEstudiante"] = nombre_estudiante
+                registro["NombreEvidencia"] = nombre_evidencia
                 registro["FechadeCarga"] = fecha_carga
                 registro["Descripcion"] = descripcion
                 registro["archivo"] = archivo
                 break
 
-    def guardar_registro(self, modo_edicion, id_evidencia, nombre, fecha_carga, desc, archivo):
+    def guardar_registro(self, modo_edicion, id_evidencia, id_estudiante, nombre_estudiante, nombre_evidencia, fecha_carga, desc, archivo):
         if modo_edicion:
-            self.modificar_registro(id_evidencia, nombre, fecha_carga, desc, archivo)
+            self.modificar_registro(id_evidencia, id_estudiante, nombre_estudiante, nombre_evidencia, fecha_carga, desc, archivo)
         else:
-            self.incluir_evidencia(id_evidencia, nombre, fecha_carga, desc, archivo)
+            self.incluir_evidencia(id_evidencia, id_estudiante, nombre_estudiante, nombre_evidencia, fecha_carga, desc, archivo)
 
     def eliminar_registro(self, id_evidencia):
         self.array_dinamico = [reg for reg in self.array_dinamico if reg["IDevidencia"] != id_evidencia]
@@ -89,7 +89,7 @@ def mostrar_submenu(menu):
     if menu == "estudiantes":
         frame_estudiantes.place(x=40, y=85)
         lbl_ruta.config(text="Estudiantes > Gestión de Evidencias")
-        volver_al_menu_principal()  # Asegura regresar la interfaz al panel estudiante
+        volver_al_menu_principal()  
     elif menu == "tutores":
         frame_tutores.place(x=40, y=165)
         lbl_ruta.config(text="Tutores Académicos")
@@ -120,7 +120,7 @@ def refrescar_tabla():
         tabla.insert("", "end", values=(
             reg["IDevidencia"], reg["NombreEvidencia"], reg["FechadeCarga"],
             reg["Descripcion"], reg["calificacion"], reg["estado"],
-            reg["fecha_revision"], reg["archivo"]
+            reg["fecha_revision"], reg["archivo"], reg["IDestudiante"], reg["NombreEstudiante"]
         ))
 
 def nueva_evidencia():
@@ -128,11 +128,15 @@ def nueva_evidencia():
     modo_edicion = False  
     id_seleccionado = None
 
+    entry_id_estudiante.config(state="normal")
+    entry_nombre_estudiante.config(state="normal")
     entry_id.config(state="normal")
     entry_nombre.config(state="normal")
     txt_descripcion.config(state="normal")
     btn_cargar.config(state="normal")
 
+    entry_id_estudiante.delete(0, tk.END)
+    entry_nombre_estudiante.delete(0, tk.END)
     entry_id.delete(0, tk.END)
     entry_nombre.delete(0, tk.END)
     txt_descripcion.delete("1.0", tk.END)
@@ -161,30 +165,39 @@ def cargar_archivo():
 def aceptar():
     global ruta_archivo, modo_edicion, id_seleccionado
 
+    id_est_texto = entry_id_estudiante.get().strip()
+    nom_est = entry_nombre_estudiante.get().strip()
     id_texto = entry_id.get().strip()
-    nombre = entry_nombre.get().strip()
+    nombre_evid = entry_nombre.get().strip()
     fecha_carga = entry_fecha_carga.get()
     descripcion = txt_descripcion.get("1.0", tk.END).strip()
 
-    if not id_texto or not nombre or not descripcion or not ruta_archivo:
+    if not id_est_texto or not nom_est or not id_texto or not nombre_evid or not descripcion or not ruta_archivo:
         messagebox.showwarning("Campos incompletos", "Por favor completa todos los campos requeridos.")
+        return
+
+    try:
+        id_est_num = int(id_est_texto)
+        if id_est_num <= 0: raise ValueError
+    except ValueError:
+        messagebox.showwarning("ID Estudiante Inválido", "El ID del Estudiante debe ser un número entero positivo.")
         return
 
     try:
         id_ingresado = int(id_texto)
         if id_ingresado <= 0: raise ValueError
     except ValueError:
-        messagebox.showwarning("ID Inválido", "El ID debe ser un número entero positivo.")
+        messagebox.showwarning("ID Evidencia Inválido", "El ID de la Evidencia debe ser un número entero positivo.")
         return
 
     if not modo_edicion:
         if gestor_evidencias.existe_id(id_ingresado):
-            messagebox.showwarning("ID Duplicado", f"El ID {id_ingresado} ya existe.")
+            messagebox.showwarning("ID Duplicado", f"El ID de evidencia {id_ingresado} ya existe.")
             return
     else:
         id_ingresado = id_seleccionado
 
-    gestor_evidencias.guardar_registro(modo_edicion, id_ingresado, nombre, fecha_carga, descripcion, ruta_archivo)
+    gestor_evidencias.guardar_registro(modo_edicion, id_ingresado, id_est_num, nom_est, nombre_evid, fecha_carga, descripcion, ruta_archivo)
     messagebox.showinfo("Correcto", "Evidencia guardada exitosamente.")
     refrescar_tabla()
     nueva_evidencia()
@@ -206,6 +219,8 @@ def modificar():
     if not seleccionado:
         messagebox.showwarning("Atención", "Selecciona un registro para modificar.")
         return
+    entry_id_estudiante.config(state="normal")
+    entry_nombre_estudiante.config(state="normal")
     entry_id.config(state="disabled")
     entry_nombre.config(state="normal")
     txt_descripcion.config(state="normal")
@@ -224,6 +239,8 @@ def cargar_datos(event):
         entry_nombre.config(state="normal")
         txt_descripcion.config(state="normal")
         entry_fecha_carga.config(state="normal")
+        entry_id_estudiante.config(state="normal")
+        entry_nombre_estudiante.config(state="normal")
 
         entry_id.delete(0, tk.END)
         entry_id.insert(0, datos[0])
@@ -233,6 +250,10 @@ def cargar_datos(event):
         entry_fecha_carga.insert(0, datos[2])
         txt_descripcion.delete("1.0", tk.END)
         txt_descripcion.insert("1.0", datos[3])
+        entry_id_estudiante.delete(0, tk.END)
+        entry_id_estudiante.insert(0, datos[8])
+        entry_nombre_estudiante.delete(0, tk.END)
+        entry_nombre_estudiante.insert(0, datos[9])
 
         ruta_archivo = datos[7]
         lbl_archivo.config(text=os.path.basename(str(datos[7])))
@@ -241,6 +262,8 @@ def cargar_datos(event):
         entry_nombre.config(state="disabled")
         txt_descripcion.config(state="disabled")
         entry_fecha_carga.config(state="readonly")
+        entry_id_estudiante.config(state="disabled")
+        entry_nombre_estudiante.config(state="disabled")
         btn_cargar.config(state="disabled")
 
 
@@ -260,7 +283,6 @@ def refrescar_tabla_revision():
             reg["fecha_revision"]
         ))
 
-# Ventana Emergente al interactuar con un registro en la rejilla del Tutor
 def abrir_ventana_evaluacion(event):
     seleccion = tabla_revision.selection()
     if not seleccion:
@@ -274,14 +296,12 @@ def abrir_ventana_evaluacion(event):
     nota_actual = valores[4]
     estado_actual = valores[5]
 
-    # Encontrar el registro correspondiente en la lista lógica para obtener el nombre real guardado
     nombre_est_actual = f"Estudiante {id_est}"
     for reg in gestor_evidencias.obtener_todos():
         if reg["IDevidencia"] == id_evid:
             nombre_est_actual = reg.get("NombreEstudiante", f"Estudiante {id_est}")
             break
 
-    # Crear Toplevel (Ventana Emergente)
     pop = tk.Toplevel(ventana)
     pop.title("Evaluación de Evidencia")
     pop.geometry("450x450")
@@ -289,19 +309,21 @@ def abrir_ventana_evaluacion(event):
     pop.resizable(False, False)
     pop.grab_set() 
 
-    # --- CAMPO EDITABLE ---
+    # --- CAMPO BLOQUEADO (Nombre del Estudiante) ---
     tk.Label(pop, text="Nombre Estudiante:", font=("Arial", 9, "bold"), bg="white").place(x=30, y=30)
     entry_pop_nombre = tk.Entry(pop, width=30)
     entry_pop_nombre.insert(0, nombre_est_actual)
+    entry_pop_nombre.config(state="disabled") # Se cambia a deshabilitado
     entry_pop_nombre.place(x=180, y=30)
 
-    # --- CAMPO EDITABLE ---
+    # --- CAMPO BLOQUEADO (ID del Estudiante) ---
     tk.Label(pop, text="ID Estudiante:", font=("Arial", 9, "bold"), bg="white").place(x=30, y=70)
     entry_pop_id = tk.Entry(pop, width=30)
     entry_pop_id.insert(0, id_est)
+    entry_pop_id.config(state="disabled") # Se cambia a deshabilitado
     entry_pop_id.place(x=180, y=70)
 
-    # --- CAMPO BLOQUEADO ---
+    # --- CAMPO BLOQUEADO (Ruta del Archivo) ---
     tk.Label(pop, text="Path del Archivo:", font=("Arial", 9, "bold"), bg="white").place(x=30, y=110)
     entry_pop_path = tk.Entry(pop, width=30)
     entry_pop_path.insert(0, path_arch)
@@ -320,54 +342,52 @@ def abrir_ventana_evaluacion(event):
     btn_pop_ver = tk.Button(pop, text="VER", font=("Arial", 8, "bold"), command=abrir_archivo_sistema)
     btn_pop_ver.place(x=380, y=107)
 
-    # --- CAMPO BLOQUEADO ---
+    # --- CAMPO HABILITADO (Observaciones) ---
     tk.Label(pop, text="Observaciones:", font=("Arial", 9, "bold"), bg="white").place(x=30, y=150)
     entry_pop_obs = tk.Entry(pop, width=35)
     entry_pop_obs.insert(0, obs_asesor)
-    entry_pop_obs.config(state="disabled") 
     entry_pop_obs.place(x=180, y=150)
 
-    # --- CAMPO BLOQUEADO ---
+    # --- CAMPO HABILITADO (Nota) ---
     tk.Label(pop, text="Nota (0.0 a 5.0):", font=("Arial", 9, "bold"), bg="white").place(x=30, y=190)
     entry_pop_nota = tk.Entry(pop, width=10)
     entry_pop_nota.insert(0, nota_actual)
-    entry_pop_nota.config(state="disabled") 
     entry_pop_nota.place(x=180, y=190)
 
-    # --- CAMPO BLOQUEADO ---
+    # --- CAMPO HABILITADO (Estado) ---
     tk.Label(pop, text="Estado:", font=("Arial", 9, "bold"), bg="white").place(x=30, y=230)
-    combo_pop_estado = ttk.Combobox(pop, values=["No Revisado", "Revisado"], state="disabled", width=15)
-    combo_pop_estado.set(estado_actual)
+    combo_pop_estado = ttk.Combobox(pop, values=["Revisado"], state="readonly", width=15)
+    combo_pop_estado.set("Revisado" if estado_actual == "Revisado" else "")
     combo_pop_estado.place(x=180, y=230)
 
-    # Función para guardar los cambios únicamente del ID y Nombre del estudiante
     def guardar_evaluacion():
-        nuevo_nombre = entry_pop_nombre.get().strip()
-        nuevo_id_texto = entry_pop_id.get().strip()
+        nuevas_obs = entry_pop_obs.get().strip()
+        estado_seleccionado = combo_pop_estado.get()
 
-        if not nuevo_nombre or not nuevo_id_texto:
-            messagebox.showwarning("Campos vacíos", "Por favor, complete el Nombre y el ID del estudiante.")
+        if estado_seleccionado != "Revisado":
+            messagebox.showwarning("Estado obligatorio", "Debe establecer el estado como 'Revisado' obligatoriamente.")
             return
 
         try:
-            nuevo_id_num = int(nuevo_id_texto)
-            if nuevo_id_num <= 0: raise ValueError
+            nota_num = float(entry_pop_nota.get())
+            if not (0.0 <= nota_num <= 5.0):
+                raise ValueError
         except ValueError:
-            messagebox.showerror("ID Inválido", "El ID del estudiante debe ser un número entero positivo.")
+            messagebox.showerror("Error de entrada", "La nota debe ser un número decimal entre 0.0 y 5.0 (Ej: 4.5).")
             return
 
-        # Actualizar datos en el almacén lógico dinámico
         for reg in gestor_evidencias.obtener_todos():
             if reg["IDevidencia"] == id_evid:
-                reg["NombreEstudiante"] = nuevo_nombre
-                reg["IDestudiante"] = nuevo_id_num
+                reg["obs_asesor"] = nuevas_obs
+                reg["calificacion"] = nota_num
+                reg["estado"] = estado_seleccionado
+                reg["fecha_revision"] = datetime.now().strftime("%d/%m/%Y")
                 break
         
-        messagebox.showinfo("Éxito", "Datos del estudiante actualizados correctamente.")
+        messagebox.showinfo("Éxito", "Evaluación actualizada correctamente.")
         refrescar_tabla_revision()
         pop.destroy()
 
-    # Botones inferiores del emergente (Cancelar Izquierda, Aceptar Derecha)
     btn_pop_cancelar = tk.Button(pop, text="Cancelar", width=12, command=pop.destroy)
     btn_pop_cancelar.place(x=40, y=360)
 
@@ -375,7 +395,6 @@ def abrir_ventana_evaluacion(event):
     btn_pop_aceptar.place(x=300, y=360)
 
 
-# Ventana con gráfico estadístico (Histograma de barras nativo)
 def mostrar_histograma_informe():
     datos = gestor_evidencias.obtener_todos()
     if not datos:
@@ -428,7 +447,6 @@ def mostrar_histograma_informe():
 # CONSTRUCCIÓN INTERFAZ GRÁFICA GENERAL
 # ==========================================
 
-# PANEL SUPERIOR ESTRUCTURAL
 frame_superior = tk.Frame(ventana, width=1032, height=60, bd=1, relief="solid", bg="white")
 frame_superior.place(x=24, y=10)
 
@@ -444,7 +462,6 @@ except Exception:
 lbl_titulo = tk.Label(frame_superior, text="Software ING", font=("Arial", 18, "bold"), bg="white")
 lbl_titulo.place(x=460, y=15)
 
-# PANEL IZQUIERDO - MENÚ DE CONTEXTOS
 frame_menu = tk.Frame(ventana, width=230, height=620, bd=1, relief="solid", bg="white")
 frame_menu.place(x=25, y=80)
 
@@ -460,7 +477,6 @@ btn_tutores.place(x=20, y=140)
 btn_asesores = tk.Button(frame_menu, text="Asesores Pedagógicos", bd=0, bg="white", anchor="w", command=lambda: mostrar_submenu("asesores"))
 btn_asesores.place(x=20, y=230)
 
-# Submenús Desplegables
 frame_estudiantes = tk.Frame(frame_menu, bg="white")
 tk.Label(frame_estudiantes, text="└ Gestión de Evidencias", bg="white").pack(anchor="w")
 
@@ -484,34 +500,42 @@ frame_principal.place(x=275, y=80)
 lbl_ruta = tk.Label(frame_principal, text="Inicio", font=("Arial", 11, "bold"), bg="white", fg="blue")
 lbl_ruta.place(x=15, y=15)
 
-tk.Label(frame_principal, text="ID Evidencia:", bg="white", font=("Arial", 9, "bold")).place(x=290, y=40)
-entry_id = tk.Entry(frame_principal, width=35)
-entry_id.place(x=430, y=40)
+tk.Label(frame_principal, text="ID Estudiante:", bg="white", font=("Arial", 9, "bold")).place(x=20, y=40)
+entry_id_estudiante = tk.Entry(frame_principal, width=25)
+entry_id_estudiante.place(x=140, y=40)
 
-tk.Label(frame_principal, text="Nombre Evidencia:", bg="white", font=("Arial", 9, "bold")).place(x=290, y=75)
-entry_nombre = tk.Entry(frame_principal, width=35)
-entry_nombre.place(x=430, y=75)
+tk.Label(frame_principal, text="Nombre Estudiante:", bg="white", font=("Arial", 9, "bold")).place(x=20, y=75)
+entry_nombre_estudiante = tk.Entry(frame_principal, width=25)
+entry_nombre_estudiante.place(x=140, y=75)
 
-tk.Label(frame_principal, text="Fecha Carga:", bg="white", font=("Arial", 9, "bold")).place(x=290, y=110)
-entry_fecha_carga = tk.Entry(frame_principal, width=35)
-entry_fecha_carga.place(x=430, y=110)
+tk.Label(frame_principal, text="ID Evidencia:", bg="white", font=("Arial", 9, "bold")).place(x=360, y=40)
+entry_id = tk.Entry(frame_principal, width=25)
+entry_id.place(x=500, y=40)
 
-tk.Label(frame_principal, text="Descripción:", bg="white", font=("Arial", 9, "bold")).place(x=290, y=145)
-txt_descripcion = tk.Text(frame_principal, width=33, height=2)
-txt_descripcion.place(x=430, y=145)
+tk.Label(frame_principal, text="Nombre Evidencia:", bg="white", font=("Arial", 9, "bold")).place(x=360, y=75)
+entry_nombre = tk.Entry(frame_principal, width=25)
+entry_nombre.place(x=500, y=75)
+
+tk.Label(frame_principal, text="Fecha Carga:", bg="white", font=("Arial", 9, "bold")).place(x=360, y=110)
+entry_fecha_carga = tk.Entry(frame_principal, width=25)
+entry_fecha_carga.place(x=500, y=110)
+
+tk.Label(frame_principal, text="Descripción:", bg="white", font=("Arial", 9, "bold")).place(x=360, y=145)
+txt_descripcion = tk.Text(frame_principal, width=23, height=2)
+txt_descripcion.place(x=500, y=145)
 
 btn_cargar = tk.Button(frame_principal, text="Cargar archivo", command=cargar_archivo)
-btn_cargar.place(x=290, y=195)
+btn_cargar.place(x=360, y=195)
 
 lbl_archivo = tk.Label(frame_principal, text="Sin archivo", bg="white", fg="blue")
-lbl_archivo.place(x=430, y=198)
+lbl_archivo.place(x=500, y=198)
 
 # Rejilla Estudiantes
-columnas = ("id", "nombre", "fecha", "descripcion", "calif", "estado", "frevision", "archivo")
+columnas = ("id", "nombre", "fecha", "descripcion", "calif", "estado", "frevision", "archivo", "id_est", "nom_est")
 tabla = ttk.Treeview(frame_principal, columns=columnas, show="headings", height=14)
 
-tabla.heading("id", text="ID")
-tabla.heading("nombre", text="Nombre")
+tabla.heading("id", text="ID Evid.")
+tabla.heading("nombre", text="Nombre Evid.")
 tabla.heading("fecha", text="F. Carga")
 tabla.heading("descripcion", text="Descripción")
 tabla.heading("calif", text="Calif.")
@@ -519,14 +543,14 @@ tabla.heading("estado", text="Estado")
 tabla.heading("frevision", text="F. Rev")
 tabla.heading("archivo", text="Archivo")
 
-tabla.column("id", width=40, anchor="center")
-tabla.column("nombre", width=120)
+tabla.column("id", width=60, anchor="center")
+tabla.column("nombre", width=110)
 tabla.column("fecha", width=80, anchor="center")
-tabla.column("descripcion", width=140)
-tabla.column("calif", width=50, anchor="center")
+tabla.column("descripcion", width=130)
+tabla.column("calif", width=45, anchor="center")
 tabla.column("estado", width=85, anchor="center")
-tabla.column("frevision", width=85, anchor="center")
-tabla.column("archivo", width=150)
+tabla.column("frevision", width=80, anchor="center")
+tabla.column("archivo", width=140)
 
 tabla.place(x=15, y=240)
 tabla.bind("<<TreeviewSelect>>", cargar_datos)
