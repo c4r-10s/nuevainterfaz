@@ -20,12 +20,12 @@ class Evidencias:
             "NombreEstudiante": nombre_estudiante,
             "NombreEvidencia": nombre_evidencia,
             "FechadeCarga": fecha_carga,
-            "Descripcion": descripcion,
+            "descripcion": descripcion,
             "calificacion": 0.0,
             "estado": "No Revisado",
             "fecha_revision": "",
             "archivo": archivo,
-            "obs_asesor": ""
+            "obs_asesor": ""  # Campo compartido con Tutores
         }
         self.array_dinamico.append(nuevo_registro)
 
@@ -36,7 +36,7 @@ class Evidencias:
                 registro["NombreEstudiante"] = nombre_estudiante
                 registro["NombreEvidencia"] = nombre_evidencia
                 registro["FechadeCarga"] = fecha_carga
-                registro["Descripcion"] = descripcion
+                registro["descripcion"] = descripcion
                 registro["archivo"] = archivo
                 break
 
@@ -53,6 +53,97 @@ class Evidencias:
         return self.array_dinamico
 
 
+# =========================================================================
+# CLASE DIRECTOR (Herencia, Arrays Dinámicos y Control de Estudiantes/Grupos)
+# =========================================================================
+class Director(Evidencias):
+    def __init__(self):
+        super().__init__()
+        self.colegios = []
+        self.profesores = []
+        self.grupos_estudiantes = []
+        self.preguntas = []
+        self.estudiantes_global = []
+
+    def guardar_estudiante(self, id_est, nombre, grupo, modo_edit):
+        if modo_edit:
+            for e in self.estudiantes_global:
+                if e["id"] == id_est:
+                    e["nombre"] = nombre
+                    e["grupo"] = grupo
+                    return True
+        else:
+            if any(e["id"] == id_est for e in self.estudiantes_global): return False
+            self.estudiantes_global.append({"id": id_est, "nombre": nombre, "grupo": group})
+            return True
+
+    def eliminar_estudiante(self, id_est):
+        self.estudiantes_global = [e for e in self.estudiantes_global if e["id"] != id_est]
+
+    def obtener_estudiantes_por_grupo(self, grupo):
+        return [e for e in self.estudiantes_global if e["grupo"] == grupo]
+
+    def guardar_colegio(self, id_col, nombre, direccion, modo_edit):
+        if modo_edit:
+            for c in self.colegios:
+                if c["id"] == id_col:
+                    c["nombre"] = nombre
+                    c["direccion"] = direccion
+                    return True
+        else:
+            if any(c["id"] == id_col for c in self.colegios): return False
+            self.colegios.append({"id": id_col, "nombre": nombre, "direccion": direccion})
+            return True
+
+    def eliminar_colegio(self, id_col):
+        self.colegios = [c for c in self.colegios if c["id"] != id_col]
+
+    def guardar_profesor(self, id_prof, nombre, especialidad, modo_edit):
+        if modo_edit:
+            for p in self.profesores:
+                if p["id"] == id_prof:
+                    p["nombre"] = nombre
+                    p["especialidad"] = especialidad
+                    return True
+        else:
+            if any(p["id"] == id_prof for p in self.profesores): return False
+            self.profesores.append({"id": id_prof, "nombre": nombre, "especialidad": especialidad})
+            return True
+
+    def eliminar_profesor(self, id_prof):
+        self.profesores = [p for p in self.profesores if p["id"] != id_prof]
+
+    def guardar_grupo(self, id_grup, letra_grup, id_prof, modo_edit):
+        if modo_edit:
+            for g in self.grupos_estudiantes:
+                if g["id"] == id_grup:
+                    g["letra"] = letra_grup
+                    g["id_profesor"] = id_prof
+                    return True
+        else:
+            if any(g["id"] == id_grup for g in self.grupos_estudiantes): return False
+            self.grupos_estudiantes.append({"id": id_grup, "letra": letra_grup, "id_profesor": id_prof})
+            return True
+
+    def eliminar_grupo(self, id_grup):
+        self.grupos_estudiantes = [g for g in self.grupos_estudiantes if g["id"] != id_grup]
+
+    def guardar_pregunta(self, id_pre, enunciado, id_evidencia, modo_edit):
+        if modo_edit:
+            for p in self.preguntas:
+                if p["id"] == id_pre:
+                    p["enunciado"] = enunciado
+                    p["id_evidencia"] = id_evidencia
+                    return True
+        else:
+            if any(p["id"] == id_pre for p in self.preguntas): return False
+            self.preguntas.append({"id": id_pre, "enunciado": enunciado, "id_evidencia": id_evidencia})
+            return True
+
+    def eliminar_pregunta(self, id_pre):
+        self.preguntas = [p for p in self.preguntas if p["id"] != id_pre]
+
+
 # ==========================================
 # CONFIGURACIÓN PRINCIPAL (TAMAÑO 1080x720)
 # ==========================================
@@ -61,22 +152,20 @@ ventana.title("Sistema de Evidencias - Entorno Académico")
 
 ancho = 1080
 alto = 720
-
 pantalla_ancho = ventana.winfo_screenwidth()
 pantalla_alto = ventana.winfo_screenheight()
-
 x = int((pantalla_ancho / 2) - (ancho / 2))
 y = int((pantalla_alto / 2) - (alto / 2))
-
 ventana.geometry(f"{ancho}x{alto}+{x}+{y}")
 ventana.configure(bg="white")
 ventana.resizable(False, False)
 
-# Variables Globales
-gestor_evidencias = Evidencias()
+LETRAS_GRUPOS = [chr(i) for i in range(ord('A'), ord('Z') + 1)]
+gestor_evidencias = Director()
 ruta_archivo = ""
 modo_edicion = False
 id_seleccionado = None
+id_evidencia_asesor_sel = None
 
 # ==========================================
 # FUNCIONES DE UI - NAVEGACIÓN ENTRE VISTAS
@@ -85,6 +174,8 @@ def mostrar_submenu(menu):
     frame_estudiantes.place_forget()
     frame_tutores.place_forget()
     frame_asesores.place_forget()
+    frame_director_menu.place_forget()
+    frame_ver_grupos_menu.place_forget()
 
     if menu == "estudiantes":
         frame_estudiantes.place(x=40, y=85)
@@ -96,30 +187,64 @@ def mostrar_submenu(menu):
     elif menu == "asesores":
         frame_asesores.place(x=40, y=255)
         lbl_ruta.config(text="Asesores Pedagógicos")
+        ir_a_asesores_pedagogicos()
+    elif menu == "director":
+        frame_director_menu.place(x=40, y=345)
+        lbl_ruta.config(text="Director > Panel de Control General")
+        ir_a_panel_director()
+    elif menu == "ver_grupos":
+        frame_ver_grupos_menu.place(x=40, y=425)
+        lbl_ruta.config(text="Consulta > Estudiantes por Grupo")
+        ir_a_vista_grupos()
 
 def ir_a_revision_evidencias():
-    frame_principal.place_forget()
+    ocultar_todos_los_paneles()
     frame_revision.place(x=275, y=80)
     refrescar_tabla_revision()
 
+def ir_a_asesores_pedagogicos():
+    ocultar_todos_los_paneles()
+    frame_asesores_panel.place(x=275, y=80)
+    limpiar_campos_asesor()
+    refrescar_tabla_asesores()
+
 def volver_al_menu_principal():
-    frame_revision.place_forget()
+    ocultar_todos_los_paneles()
     frame_principal.place(x=275, y=80)
     refrescar_tabla()
+
+def ir_a_panel_director():
+    ocultar_todos_los_paneles()
+    frame_director.place(x=275, y=80)
+    actualizar_combos_director()
+    refrescar_tablas_director()
+
+def ir_a_vista_grupos():
+    ocultar_todos_los_paneles()
+    frame_ver_grupos.place(x=275, y=80)
+    combo_filtro_letra.set("")
+    tabla_filtro_grupos.delete(*tabla_filtro_grupos.get_children())
+
+def ocultar_todos_los_paneles():
+    frame_principal.place_forget()
+    frame_revision.place_forget()
+    frame_asesores_panel.place_forget()
+    frame_director.place_forget()
+    frame_ver_grupos.place_forget()
 
 def salir():
     if messagebox.askyesno("Salir", "¿Desea salir del sistema?"):
         ventana.destroy()
 
 # ==========================================
-# GESTIÓN TABLA ESTUDIANTE
+# GESTIÓN TABLA ESTUDIANTE (ENTREGA EVIDENCIAS)
 # ==========================================
 def refrescar_tabla():
     tabla.delete(*tabla.get_children())
     for reg in gestor_evidencias.obtener_todos():
         tabla.insert("", "end", values=(
             reg["IDevidencia"], reg["NombreEvidencia"], reg["FechadeCarga"],
-            reg["Descripcion"], reg["calificacion"], reg["estado"],
+            reg["descripcion"], reg["calificacion"], reg["estado"],
             reg["fecha_revision"], reg["archivo"], reg["IDestudiante"], reg["NombreEstudiante"]
         ))
 
@@ -285,8 +410,7 @@ def refrescar_tabla_revision():
 
 def abrir_ventana_evaluacion(event):
     seleccion = tabla_revision.selection()
-    if not seleccion:
-        return
+    if not seleccion: return
     
     valores = tabla_revision.item(seleccion)["values"]
     id_est = valores[0]
@@ -303,27 +427,24 @@ def abrir_ventana_evaluacion(event):
             break
 
     pop = tk.Toplevel(ventana)
-    pop.title("Evaluación de Evidencia")
+    pop.title("Evaluación de Evidencia - Tutor")
     pop.geometry("450x450")
     pop.configure(bg="white")
     pop.resizable(False, False)
     pop.grab_set() 
 
-    # --- CAMPO BLOQUEADO (Nombre del Estudiante) ---
     tk.Label(pop, text="Nombre Estudiante:", font=("Arial", 9, "bold"), bg="white").place(x=30, y=30)
     entry_pop_nombre = tk.Entry(pop, width=30)
     entry_pop_nombre.insert(0, nombre_est_actual)
-    entry_pop_nombre.config(state="disabled") # Se cambia a deshabilitado
+    entry_pop_nombre.config(state="disabled") 
     entry_pop_nombre.place(x=180, y=30)
 
-    # --- CAMPO BLOQUEADO (ID del Estudiante) ---
     tk.Label(pop, text="ID Estudiante:", font=("Arial", 9, "bold"), bg="white").place(x=30, y=70)
     entry_pop_id = tk.Entry(pop, width=30)
     entry_pop_id.insert(0, id_est)
-    entry_pop_id.config(state="disabled") # Se cambia a deshabilitado
+    entry_pop_id.config(state="disabled") 
     entry_pop_id.place(x=180, y=70)
 
-    # --- CAMPO BLOQUEADO (Ruta del Archivo) ---
     tk.Label(pop, text="Path del Archivo:", font=("Arial", 9, "bold"), bg="white").place(x=30, y=110)
     entry_pop_path = tk.Entry(pop, width=30)
     entry_pop_path.insert(0, path_arch)
@@ -332,65 +453,54 @@ def abrir_ventana_evaluacion(event):
 
     def abrir_archivo_sistema():
         if os.path.exists(path_arch):
-            try:
-                os.startfile(path_arch)
-            except Exception as e:
-                messagebox.showerror("Error", f"No se pudo abrir el archivo:\n{e}")
-        else:
-            messagebox.showwarning("Archivo no encontrado", f"El archivo local no existe o la ruta es ficticia:\n{path_arch}")
+            try: os.startfile(path_arch)
+            except Exception as e: messagebox.showerror("Error", f"No se pudo abrir:\n{e}")
+        else: messagebox.showwarning("Archivo local no encontrado", f"Ruta:\n{path_arch}")
 
     btn_pop_ver = tk.Button(pop, text="VER", font=("Arial", 8, "bold"), command=abrir_archivo_sistema)
     btn_pop_ver.place(x=380, y=107)
 
-    # --- CAMPO HABILITADO (Observaciones) ---
-    tk.Label(pop, text="Observaciones:", font=("Arial", 9, "bold"), bg="white").place(x=30, y=150)
+    tk.Label(pop, text="Obs. Asesor (Lectura):", font=("Arial", 9, "bold"), bg="white").place(x=30, y=150)
     entry_pop_obs = tk.Entry(pop, width=35)
     entry_pop_obs.insert(0, obs_asesor)
+    entry_pop_obs.config(state="disabled")
     entry_pop_obs.place(x=180, y=150)
 
-    # --- CAMPO HABILITADO (Nota) ---
     tk.Label(pop, text="Nota (0.0 a 5.0):", font=("Arial", 9, "bold"), bg="white").place(x=30, y=190)
     entry_pop_nota = tk.Entry(pop, width=10)
     entry_pop_nota.insert(0, nota_actual)
     entry_pop_nota.place(x=180, y=190)
 
-    # --- CAMPO HABILITADO (Estado) ---
     tk.Label(pop, text="Estado:", font=("Arial", 9, "bold"), bg="white").place(x=30, y=230)
     combo_pop_estado = ttk.Combobox(pop, values=["Revisado"], state="readonly", width=15)
     combo_pop_estado.set("Revisado" if estado_actual == "Revisado" else "")
     combo_pop_estado.place(x=180, y=230)
 
     def guardar_evaluacion():
-        nuevas_obs = entry_pop_obs.get().strip()
         estado_seleccionado = combo_pop_estado.get()
-
         if estado_seleccionado != "Revisado":
-            messagebox.showwarning("Estado obligatorio", "Debe establecer el estado como 'Revisado' obligatoriamente.")
+            messagebox.showwarning("Estado obligatorio", "Debe establecer el estado como 'Revisado'.")
             return
-
         try:
             nota_num = float(entry_pop_nota.get())
-            if not (0.0 <= nota_num <= 5.0):
-                raise ValueError
+            if not (0.0 <= nota_num <= 5.0): raise ValueError
         except ValueError:
-            messagebox.showerror("Error de entrada", "La nota debe ser un número decimal entre 0.0 y 5.0 (Ej: 4.5).")
+            messagebox.showerror("Error de entrada", "La nota debe ser un número decimal entre 0.0 y 5.0.")
             return
 
         for reg in gestor_evidencias.obtener_todos():
             if reg["IDevidencia"] == id_evid:
-                reg["obs_asesor"] = nuevas_obs
                 reg["calificacion"] = nota_num
                 reg["estado"] = estado_seleccionado
                 reg["fecha_revision"] = datetime.now().strftime("%d/%m/%Y")
                 break
         
-        messagebox.showinfo("Éxito", "Evaluación actualizada correctamente.")
+        messagebox.showinfo("Éxito", "Evaluación del Tutor guardada.")
         refrescar_tabla_revision()
         pop.destroy()
 
     btn_pop_cancelar = tk.Button(pop, text="Cancelar", width=12, command=pop.destroy)
     btn_pop_cancelar.place(x=40, y=360)
-
     btn_pop_aceptar = tk.Button(pop, text="Aceptar", width=12, bg="#d9f2d9", command=guardar_evaluacion)
     btn_pop_aceptar.place(x=300, y=360)
 
@@ -400,17 +510,14 @@ def mostrar_histograma_informe():
     if not datos:
         messagebox.showwarning("Sin datos", "No existen evidencias para graficar un informe.")
         return
-
     v_grafico = tk.Toplevel(ventana)
     v_grafico.title("Informe: Histograma Histórico de Notas")
     v_grafico.geometry("600x450")
     v_grafico.configure(bg="white")
 
     tk.Label(v_grafico, text="Histograma de Rendimiento Académico", font=("Arial", 12, "bold"), bg="white").pack(pady=10)
-
     canvas = tk.Canvas(v_grafico, width=520, height=340, bg="#f9f9f9", bd=1, relief="solid")
     canvas.pack(pady=5)
-
     canvas.create_line(50, 20, 50, 300, width=2)   
     canvas.create_line(50, 300, 500, 300, width=2) 
 
@@ -418,7 +525,6 @@ def mostrar_histograma_informe():
         y_pos = 300 - (i * 50)
         canvas.create_line(45, y_pos, 50, y_pos)
         canvas.create_text(30, y_pos, text=str(float(i)), font=("Arial", 8))
-    canvas.create_text(20, 15, text="Nota (Y)", font=("Arial", 8, "bold"), anchor="w")
 
     ancho_barra = 40
     espacio = 30
@@ -427,37 +533,76 @@ def mostrar_histograma_informe():
     for index, reg in enumerate(datos):
         nota = reg.get("calificacion", 0.0)
         id_est = reg.get("IDestudiante", "N/A")
-
         altura_barra = int(nota * 50)
         y_top = 300 - altura_barra
-
         x1 = x_inicial + (index * (ancho_barra + espacio))
-        y1 = y_top
-        x2 = x1 + ancho_barra
-        y2 = 300
-
-        canvas.create_rectangle(x1, y1, x2, y2, fill="#4a90e2", outline="#2a60a0")
-        canvas.create_text(x1 + 20, y1 - 10, text=str(nota), font=("Arial", 8, "bold"))
+        canvas.create_rectangle(x1, y_top, x1 + ancho_barra, 300, fill="#4a90e2", outline="#2a60a0")
+        canvas.create_text(x1 + 20, y_top - 10, text=str(nota), font=("Arial", 8, "bold"))
         canvas.create_text(x1 + 20, 315, text=f"ID:{id_est}", font=("Arial", 8), angle=45)
 
-    canvas.create_text(480, 325, text="Estudiante (X)", font=("Arial", 8, "bold"), anchor="e")
+
+# =========================================================================
+# ASESORES PEDAGÓGICOS: SECCIÓN CON CUADRO RECTANGULAR INTEGRADO BAJO LA REJILLA
+# =========================================================================
+def refrescar_tabla_asesores():
+    tabla_asesores.delete(*tabla_asesores.get_children())
+    for reg in gestor_evidencias.obtener_todos():
+        tabla_asesores.insert("", "end", values=(
+            reg["IDevidencia"],
+            reg["IDestudiante"],
+            reg["NombreEstudiante"],
+            reg["NombreEvidencia"],
+            reg.get("obs_asesor", "")
+        ))
+
+def cargar_observacion_al_seleccionar(event):
+    global id_evidencia_asesor_sel
+    seleccion = tabla_asesores.selection()
+    if seleccion:
+        valores = tabla_asesores.item(seleccion)["values"]
+        id_evidencia_asesor_sel = valores[0]
+        obs_actual = valores[4]
+        
+        txt_obs_directo.delete("1.0", tk.END)
+        txt_obs_directo.insert("1.0", obs_actual)
+
+def guardar_observacion_directa():
+    global id_evidencia_asesor_sel
+    if id_evidencia_asesor_sel is None:
+        messagebox.showwarning("Atención", "Por favor seleccione un estudiante de la rejilla superior.")
+        return
+    
+    nueva_obs = txt_obs_directo.get("1.0", tk.END).strip()
+    
+    for reg in gestor_evidencias.obtener_todos():
+        if reg["IDevidencia"] == id_evidencia_asesor_sel:
+            reg["obs_asesor"] = nueva_obs
+            break
+            
+    messagebox.showinfo("Guardado", "Observación registrada correctamente. Disponible para el Tutor Académico.")
+    refrescar_tabla_asesores()
+    limpiar_campos_asesor()
+
+def limpiar_campos_asesor():
+    txt_obs_directo.delete("1.0", tk.END)
+
+# NUEVO: Acción del Botón Salir (Limpia campos y envía al Menú Principal)
+def salir_y_volver_al_inicio():
+    global id_evidencia_asesor_sel
+    id_evidencia_asesor_sel = None
+    limpiar_campos_asesor()
+    if tabla_asesores.selection():
+        tabla_asesores.selection_remove(tabla_asesores.selection())
+    
+    # Redirección forzada al menú de inicio (Estudiantes)
+    mostrar_submenu("estudiantes")
 
 
 # ==========================================
 # CONSTRUCCIÓN INTERFAZ GRÁFICA GENERAL
 # ==========================================
-
 frame_superior = tk.Frame(ventana, width=1032, height=60, bd=1, relief="solid", bg="white")
 frame_superior.place(x=24, y=10)
-
-try:
-    imagen_logo = tk.PhotoImage(file=r"C:\Users\SALA-2\Downloads\Programacion\logoudi.png")
-    lbl_logo = tk.Label(frame_superior, image=imagen_logo, bg="white")
-    lbl_logo.image = imagen_logo
-    lbl_logo.place(x=100, y=0)
-except Exception:
-    lbl_logo = tk.Label(frame_superior, text="LOGO", bg="#D9D9D9", font=("Arial", 12, "bold"))
-    lbl_logo.place(x=150, y=10)
 
 lbl_titulo = tk.Label(frame_superior, text="Software ING", font=("Arial", 18, "bold"), bg="white")
 lbl_titulo.place(x=460, y=15)
@@ -477,22 +622,35 @@ btn_tutores.place(x=20, y=140)
 btn_asesores = tk.Button(frame_menu, text="Asesores Pedagógicos", bd=0, bg="white", anchor="w", command=lambda: mostrar_submenu("asesores"))
 btn_asesores.place(x=20, y=230)
 
+btn_director = tk.Button(frame_menu, text="Director General", bd=0, bg="white", font=("Arial", 10, "bold"), fg="darkred", anchor="w", command=lambda: mostrar_submenu("director"))
+btn_director.place(x=20, y=310)
+
+btn_ver_grupos = tk.Button(frame_menu, text="Ver por Grupos", bd=0, bg="white", font=("Arial", 10, "bold"), fg="blue", anchor="w", command=lambda: mostrar_submenu("ver_grupos"))
+btn_ver_grupos.place(x=20, y=390)
+
 frame_estudiantes = tk.Frame(frame_menu, bg="white")
 tk.Label(frame_estudiantes, text="└ Gestión de Evidencias", bg="white").pack(anchor="w")
 
 frame_tutores = tk.Frame(frame_menu, bg="white")
-btn_sub_revisar = tk.Button(frame_tutores, text="└ Revisar Evidencias", bg="white", bd=0, activebackground="white", command=ir_a_revision_evidencias)
+btn_sub_revisar = tk.Button(frame_tutores, text="└ Revisar Evidencias", bg="white", bd=0, command=ir_a_revision_evidencias)
 btn_sub_revisar.pack(anchor="w")
 
 frame_asesores = tk.Frame(frame_menu, bg="white")
-tk.Label(frame_asesores, text="└ Observaciones", bg="white").pack(anchor="w")
+btn_sub_obs = tk.Button(frame_asesores, text="└ Evaluar Campo Obs.", bg="white", bd=0, command=ir_a_asesores_pedagogicos)
+btn_sub_obs.pack(anchor="w")
 
-btn_salir = tk.Button(frame_menu, text="Salir", width=15, command=salir)
+frame_director_menu = tk.Frame(frame_menu, bg="white")
+tk.Label(frame_director_menu, text="└ Panel Global CRUD", fg="darkred", bg="white").pack(anchor="w")
+
+frame_ver_grupos_menu = tk.Frame(frame_menu, bg="white")
+tk.Label(frame_ver_grupos_menu, text="└ Consulta A - Z", fg="blue", bg="white").pack(anchor="w")
+
+btn_salir = tk.Button(frame_menu, text="Salir App", width=15, command=salir)
 btn_salir.place(x=20, y=570)
 
 
 # ==========================================
-# ENTIDADES ASOCIADAS AL PANEL DERECHO 1: ESTUDIANTES
+# PANEL DERECHO 1: ESTUDIANTES
 # ==========================================
 frame_principal = tk.Frame(ventana, width=780, height=620, bd=1, relief="solid", bg="white")
 frame_principal.place(x=275, y=80)
@@ -530,7 +688,6 @@ btn_cargar.place(x=360, y=195)
 lbl_archivo = tk.Label(frame_principal, text="Sin archivo", bg="white", fg="blue")
 lbl_archivo.place(x=500, y=198)
 
-# Rejilla Estudiantes
 columnas = ("id", "nombre", "fecha", "descripcion", "calif", "estado", "frevision", "archivo", "id_est", "nom_est")
 tabla = ttk.Treeview(frame_principal, columns=columnas, show="headings", height=14)
 
@@ -557,30 +714,23 @@ tabla.bind("<<TreeviewSelect>>", cargar_datos)
 
 btn_cancelar = tk.Button(frame_principal, text="Cancelar", width=12, command=nueva_evidencia)
 btn_cancelar.place(x=15, y=570)
-
 btn_nuevo = tk.Button(frame_principal, text="Nueva Evidencia", width=15, command=nueva_evidencia)
 btn_nuevo.place(x=125, y=570)
-
 btn_modificar = tk.Button(frame_principal, text="Modificar", width=12, command=modificar)
 btn_modificar.place(x=350, y=570)
-
 btn_eliminar = tk.Button(frame_principal, text="Eliminar", width=12, command=eliminar)
 btn_eliminar.place(x=460, y=570)
-
 btn_aceptar = tk.Button(frame_principal, text="Aceptar", width=15, bg="#ffffff", command=aceptar)
 btn_aceptar.place(x=640, y=570)
 
 
 # ==========================================
-# ENTIDADES ASOCIADAS AL PANEL DERECHO 2: REVISIÓN DE EVIDENCIAS
+# PANEL DERECHO 2: REVISIÓN DE EVIDENCIAS (TUTORES)
 # ==========================================
 frame_revision = tk.Frame(ventana, width=780, height=620, bd=1, relief="solid", bg="white")
 
 lbl_sub1 = tk.Label(frame_revision, text="Tutor Académico", font=("Arial", 14, "bold"), bg="white", fg="#333333")
 lbl_sub1.place(x=15, y=15)
-
-lbl_sub2 = tk.Label(frame_revision, text="Revisión de Evidencias", font=("Arial", 11, "italic"), bg="white", fg="#666666")
-lbl_sub2.place(x=15, y=45)
 
 columnas_rev = ("id_est", "id_evid", "path_arch", "obs_ase", "nota", "estado", "f_rev")
 tabla_revision = ttk.Treeview(frame_revision, columns=columnas_rev, show="headings", height=18)
@@ -600,22 +750,258 @@ tabla_revision.column("obs_ase", width=140, anchor="w")
 tabla_revision.column("nota", width=65, anchor="center")
 tabla_revision.column("estado", width=100, anchor="center")
 tabla_revision.column("f_rev", width=100, anchor="center")
-
 tabla_revision.place(x=15, y=90)
 tabla_revision.bind("<Double-1>", abrir_ventana_evaluacion)
-tabla_revision.bind("<<TreeviewSelect>>", abrir_ventana_evaluacion)
 
 btn_informe = tk.Button(frame_revision, text="Informe", width=15, font=("Arial", 10, "bold"), command=mostrar_histograma_informe)
 btn_informe.place(x=15, y=550)
 
-btn_salir_revision = tk.Button(frame_revision, text="Salir", width=15, font=("Arial", 10, "bold"), command=volver_al_menu_principal)
-btn_salir_revision.place(x=630, y=550)
+
+# =========================================================================
+# MODIFICADO: PANEL DERECHO 3: ASESORES PEDAGÓGICOS (BOTÓN SALIR REDIRIGIDO)
+# =========================================================================
+frame_asesores_panel = tk.Frame(ventana, width=780, height=620, bd=1, relief="solid", bg="white")
+
+lbl_as_tit = tk.Label(frame_asesores_panel, text="Panel de Asesores Pedagógicos", font=("Arial", 14, "bold"), bg="white", fg="darkblue")
+lbl_as_tit.place(x=15, y=12)
+
+columnas_as = ("id_evid", "id_est", "nom_est", "nom_evid", "obs_asesor")
+tabla_asesores = ttk.Treeview(frame_asesores_panel, columns=columnas_as, show="headings", height=11)
+
+tabla_asesores.heading("id_evid", text="ID Evidencia")
+tabla_asesores.heading("id_est", text="ID Estudiante")
+tabla_asesores.heading("nom_est", text="Nombre Estudiante")
+tabla_asesores.heading("nom_evid", text="Evidencia")
+tabla_asesores.heading("obs_asesor", text="Obs. Asesor (Destino Tutor)")
+
+tabla_asesores.column("id_evid", width=80, anchor="center")
+tabla_asesores.column("id_est", width=90, anchor="center")
+tabla_asesores.column("nom_est", width=170)
+tabla_asesores.column("nom_evid", width=150)
+tabla_asesores.column("obs_asesor", width=250)
+tabla_asesores.place(x=15, y=45)
+
+tabla_asesores.bind("<<TreeviewSelect>>", cargar_observacion_al_seleccionar)
+
+lbl_obs_titulo = tk.Label(frame_asesores_panel, text="Observaciones", font=("Arial", 11, "bold"), bg="white", fg="#333333")
+lbl_obs_titulo.place(x=15, y=320)
+
+txt_obs_directo = tk.Text(frame_asesores_panel, width=91, height=9, bd=1, relief="solid", font=("Arial", 10))
+txt_obs_directo.place(x=15, y=345)
+
+# MODIFICADO: BOTÓN "Salir" REDIRIGE AL MENÚ PRINCIPAL
+btn_as_salir = tk.Button(frame_asesores_panel, text="Salir", width=15, font=("Arial", 10), command=salir_y_volver_al_inicio)
+btn_as_salir.place(x=15, y=530)
+
+btn_as_guardar = tk.Button(frame_asesores_panel, text="Guardar", width=15, font=("Arial", 10, "bold"), bg="#4a90e2", fg="white", command=guardar_observacion_directa)
+btn_as_guardar.place(x=160, y=530)
+
+btn_as_limpiar = tk.Button(frame_asesores_panel, text="Limpiar", width=15, font=("Arial", 10), command=limpiar_campos_asesor)
+btn_as_limpiar.place(x=305, y=530)
 
 
 # ==========================================
-# INICIALIZACIÓN POR DEFECTO
+# PANEL DERECHO 4: INTERFAZ DEL DIRECTOR
 # ==========================================
+frame_director = tk.Frame(ventana, width=780, height=620, bd=1, relief="solid", bg="#fcfcfc")
+
+notebook = ttk.Notebook(frame_director, width=750, height=540)
+notebook.place(x=15, y=45)
+
+tab_estudiantes_dir = tk.Frame(notebook, bg="white")
+tab_colegios = tk.Frame(notebook, bg="white")
+tab_profesores = tk.Frame(notebook, bg="white")
+tab_grupos = tk.Frame(notebook, bg="white")
+tab_preguntas = tk.Frame(notebook, bg="white")
+
+notebook.add(tab_estudiantes_dir, text="1. Registrar Estudiantes")
+notebook.add(tab_colegios, text="2. Colegios")
+notebook.add(tab_profesores, text="3. Profesores")
+notebook.add(tab_grupos, text="4. Grupos a Profesores")
+notebook.add(tab_preguntas, text="5. Subir Preguntas")
+
+edit_est_d = False
+
+def refrescar_tablas_director():
+    tabla_est_dir.delete(*tabla_est_dir.get_children())
+    for e in gestor_evidencias.estudiantes_global:
+        tabla_est_dir.insert("", "end", values=(e["id"], e["nombre"], e["grupo"]))
+    tabla_col.delete(*tabla_col.get_children())
+    for c in gestor_evidencias.colegios:
+        tabla_col.insert("", "end", values=(c["id"], c["nombre"], c["direccion"]))
+    tabla_prof.delete(*tabla_prof.get_children())
+    for p in gestor_evidencias.profesores:
+        tabla_prof.insert("", "end", values=(p["id"], p["nombre"], p["especialidad"]))
+    tabla_grup.delete(*tabla_grup.get_children())
+    for g in gestor_evidencias.grupos_estudiantes:
+        tabla_grup.insert("", "end", values=(g["id"], g["letra"], g["id_profesor"]))
+    tabla_pre.delete(*tabla_pre.get_children())
+    for pr in gestor_evidencias.preguntas:
+        tabla_pre.insert("", "end", values=(pr["id"], pr["enunciado"], pr["id_evidencia"]))
+
+def actualizar_combos_director():
+    list_profs = [f"{p['id']} - {p['nombre']}" for p in gestor_evidencias.profesores]
+    combo_grup_prof.config(values=list_profs)
+    list_evid = [str(reg["IDevidencia"]) for reg in gestor_evidencias.obtener_todos()]
+    combo_pre_evid.config(values=list_evid)
+
+def limpiar_estudiante_dir():
+    global edit_est_d
+    edit_est_d = False
+    ent_est_id.config(state="normal")
+    ent_est_id.delete(0, tk.END)
+    ent_est_nom.delete(0, tk.END)
+    combo_est_grupo.set("")
+
+def accion_guardar_estudiante():
+    try:
+        id_e = int(ent_est_id.get().strip())
+        nom = ent_est_nom.get().strip()
+        grup = combo_est_grupo.get()
+        if not nom or not grup: raise Exception
+        res = gestor_evidencias.guardar_estudiante(id_e, nom, grup, edit_est_d)
+        if res:
+            messagebox.showinfo("Éxito", "Estudiante registrado.")
+            refrescar_tablas_director()
+            limpiar_estudiante_dir()
+        else: messagebox.showwarning("Error", "ID duplicado.")
+    except: messagebox.showwarning("Error", "Campos inválidos.")
+
+def cargar_estudiante_dir(event):
+    global edit_est_d
+    sel = tabla_est_dir.selection()
+    if sel:
+        datos = tabla_est_dir.item(sel)["values"]
+        limpiar_estudiante_dir()
+        ent_est_id.insert(0, datos[0])
+        ent_est_id.config(state="disabled")
+        ent_est_nom.insert(0, datos[1])
+        combo_est_grupo.set(datos[2])
+        edit_est_d = True
+
+tk.Label(tab_estudiantes_dir, text="ID Estudiante:", bg="white", font=("Arial", 9, "bold")).place(x=20, y=20)
+ent_est_id = tk.Entry(tab_estudiantes_dir, width=15)
+ent_est_id.place(x=140, y=20)
+tk.Label(tab_estudiantes_dir, text="Nombre Completo:", bg="white", font=("Arial", 9, "bold")).place(x=20, y=55)
+ent_est_nom = tk.Entry(tab_estudiantes_dir, width=30)
+ent_est_nom.place(x=140, y=55)
+tk.Label(tab_estudiantes_dir, text="Grupo (A-Z):", bg="white", font=("Arial", 9, "bold")).place(x=20, y=90)
+combo_est_grupo = ttk.Combobox(tab_estudiantes_dir, values=LETRAS_GRUPOS, state="readonly", width=10)
+combo_est_grupo.place(x=140, y=90)
+tk.Button(tab_estudiantes_dir, text="Guardar", command=accion_guardar_estudiante).place(x=140, y=130)
+
+tabla_est_dir = ttk.Treeview(tab_estudiantes_dir, columns=("id", "nom", "grup"), show="headings", height=12)
+tabla_est_dir.heading("id", text="ID Estudiante"); tabla_est_dir.heading("nom", text="Nombre del Alumno"); tabla_est_dir.heading("grup", text="Grupo Asignado")
+tabla_est_dir.column("id", width=120, anchor="center"); tabla_est_dir.column("nom", width=350); tabla_est_dir.column("grup", width=150, anchor="center")
+tabla_est_dir.place(x=20, y=180)
+tabla_est_dir.bind("<<TreeviewSelect>>", cargar_estudiante_dir)
+
+def accion_guardar_colegio():
+    try:
+        id_c = int(ent_col_id.get().strip())
+        nom = ent_col_nom.get().strip()
+        dir_c = ent_col_dir.get().strip()
+        if gestor_evidencias.guardar_colegio(id_c, nom, dir_c, False): refrescar_tablas_director()
+    except: pass
+
+tk.Label(tab_colegios, text="ID Colegio:", bg="white").place(x=20, y=20)
+ent_col_id = tk.Entry(tab_colegios, width=15)
+ent_col_id.place(x=120, y=20)
+tk.Label(tab_colegios, text="Nombre:", bg="white").place(x=20, y=55)
+ent_col_nom = tk.Entry(tab_colegios, width=30)
+ent_col_nom.place(x=120, y=55)
+tk.Label(tab_colegios, text="Dirección:", bg="white").place(x=20, y=90)
+ent_col_dir = tk.Entry(tab_colegios, width=30)
+ent_col_dir.place(x=120, y=90)
+tk.Button(tab_colegios, text="Guardar", command=accion_guardar_colegio).place(x=120, y=130)
+tabla_col = ttk.Treeview(tab_colegios, columns=("id", "nom", "dir"), show="headings", height=12)
+tabla_col.heading("id", text="ID"); tabla_col.heading("nom", text="Colegio"); tabla_col.heading("dir", text="Dirección")
+tabla_col.place(x=20, y=180)
+
+def accion_guardar_profesor():
+    try:
+        id_p = int(ent_prof_id.get().strip())
+        nom = ent_prof_nom.get().strip()
+        esp = ent_prof_esp.get().strip()
+        if gestor_evidencias.guardar_profesor(id_p, nom, esp, False):
+            refrescar_tablas_director(); actualizar_combos_director()
+    except: pass
+
+tk.Label(tab_profesores, text="ID Profesor:", bg="white").place(x=20, y=20)
+ent_prof_id = tk.Entry(tab_profesores, width=15)
+ent_prof_id.place(x=120, y=20)
+tk.Label(tab_profesores, text="Nombre:", bg="white").place(x=20, y=55)
+ent_prof_nom = tk.Entry(tab_profesores, width=30)
+ent_prof_nom.place(x=120, y=55)
+tk.Label(tab_profesores, text="Especialidad:", bg="white").place(x=20, y=90)
+ent_prof_esp = tk.Entry(tab_profesores, width=30)
+ent_prof_esp.place(x=120, y=90)
+tk.Button(tab_profesores, text="Guardar", command=accion_guardar_profesor).place(x=120, y=130)
+tabla_prof = ttk.Treeview(tab_profesores, columns=("id", "nom", "esp"), show="headings", height=12)
+tabla_prof.heading("id", text="ID"); tabla_prof.heading("nom", text="Profesor"); tabla_prof.heading("esp", text="Especialidad")
+tabla_prof.place(x=20, y=180)
+
+def accion_guardar_grupo():
+    try:
+        id_g = int(ent_grup_id.get().strip())
+        letra = combo_grup_letra.get()
+        prof_sel = combo_grup_prof.get()
+        id_p = int(prof_sel.split(" - ")[0]) if prof_sel else 0
+        if gestor_evidencias.guardar_grupo(id_g, letra, id_p, False): refrescar_tablas_director()
+    except: pass
+
+tk.Label(tab_grupos, text="ID Registro:", bg="white").place(x=20, y=20)
+ent_grup_id = tk.Entry(tab_grupos, width=15)
+ent_grup_id.place(x=140, y=20)
+tk.Label(tab_grupos, text="Letra Grupo:", bg="white").place(x=20, y=55)
+combo_grup_letra = ttk.Combobox(tab_grupos, values=LETRAS_GRUPOS, state="readonly", width=12)
+combo_grup_letra.place(x=140, y=55)
+tk.Label(tab_grupos, text="Profesor:", bg="white").place(x=20, y=90)
+combo_grup_prof = ttk.Combobox(tab_grupos, state="readonly", width=30)
+combo_grup_prof.place(x=140, y=90)
+tk.Button(tab_grupos, text="Asignar", command=accion_guardar_grupo).place(x=140, y=130)
+tabla_grup = ttk.Treeview(tab_grupos, columns=("id", "letra", "prof"), show="headings", height=11)
+tabla_grup.heading("id", text="ID Reg"); tabla_grup.heading("letra", text="Grupo"); tabla_grup.heading("prof", text="ID Profesor")
+tabla_grup.place(x=20, y=185)
+
+tk.Label(tab_preguntas, text="ID Pregunta:", bg="white").place(x=20, y=20)
+ent_pre_id = tk.Entry(tab_preguntas, width=15)
+ent_pre_id.place(x=150, y=20)
+tk.Label(tab_preguntas, text="Enunciado:", bg="white").place(x=20, y=55)
+ent_pre_enun = tk.Entry(tab_preguntas, width=50)
+ent_pre_enun.place(x=150, y=55)
+tk.Label(tab_preguntas, text="ID Evidencia:", bg="white").place(x=20, y=90)
+combo_pre_evid = ttk.Combobox(tab_preguntas, state="readonly", width=15)
+combo_pre_evid.place(x=150, y=90)
+tabla_pre = ttk.Treeview(tab_preguntas, columns=("id", "enun", "evid"), show="headings", height=12)
+tabla_pre.heading("id", text="ID"); tabla_pre.heading("enun", text="Pregunta"); tabla_pre.heading("evid", text="Evidencia")
+tabla_pre.place(x=20, y=180)
+
+
+# ==========================================
+# PANEL DERECHO 5: VISUALIZAR GRUPOS
+# ==========================================
+frame_ver_grupos = tk.Frame(ventana, width=780, height=620, bd=1, relief="solid", bg="white")
+lbl_tit_filtro = tk.Label(frame_ver_grupos, text="CONSULTA DE GRUPOS INSTITUCIONALES", font=("Arial", 14, "bold"), bg="white", fg="blue")
+lbl_tit_filtro.place(x=15, y=15)
+
+def filtrar_estudiantes_por_letra(event):
+    letra_seleccionada = combo_filtro_letra.get()
+    tabla_filtro_grupos.delete(*tabla_filtro_grupos.get_children())
+    lista_alumnos = gestor_evidencias.obtener_estudiantes_por_grupo(letra_seleccionada)
+    for alum in lista_alumnos:
+        tabla_filtro_grupos.insert("", "end", values=(alum["id"], alum["nombre"], f"Grupo {alum['grupo']}"))
+
+combo_filtro_letra = ttk.Combobox(frame_ver_grupos, values=LETRAS_GRUPOS, state="readonly", font=("Arial", 11, "bold"), width=8)
+combo_filtro_letra.place(x=260, y=58)
+combo_filtro_letra.bind("<<ComboboxSelected>>", filtrar_estudiantes_por_letra)
+
+tabla_filtro_grupos = ttk.Treeview(frame_ver_grupos, columns=("id", "nom", "grup"), show="headings", height=20)
+tabla_filtro_grupos.heading("id", text="ID Estudiante"); tabla_filtro_grupos.heading("nom", text="Nombre Completo"); tabla_filtro_grupos.heading("grup", text="Grupo")
+tabla_filtro_grupos.column("id", width=150, anchor="center"); tabla_filtro_grupos.column("nom", width=420); tabla_filtro_grupos.column("grup", width=160, anchor="center")
+tabla_filtro_grupos.place(x=15, y=110)
+
+# Inicialización por defecto
 nueva_evidencia() 
 refrescar_tabla()
-
 ventana.mainloop()
