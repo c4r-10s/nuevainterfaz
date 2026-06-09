@@ -64,6 +64,28 @@ class Director(Evidencias):
         self.grupos_estudiantes = []
         self.preguntas = []
         self.estudiantes_global = []
+        self.reuniones_global = [] # Array dinámico para las reuniones
+
+    # Métodos para gestionar reuniones
+    def guardar_reunion(self, fecha, id_est, tema, observaciones):
+        nueva_reunion = {
+            "fecha": fecha,
+            "id_estudiante": id_est,
+            "tema": tema,
+            "observaciones": observaciones
+        }
+        self.reuniones_global.append(nueva_reunion)
+
+    def obtener_reuniones(self):
+        return self.reuniones_global
+
+    # NUEVO: Método para verificar si el estudiante existe en el sistema
+    def existe_estudiante(self, id_estudiante):
+        # Verifica en los alumnos registrados globales (por el director)
+        en_global = any(e["id"] == id_estudiante for e in self.estudiantes_global)
+        # Verifica en las evidencias ya subidas (por la pestaña estudiantes)
+        en_evidencias = any(reg["IDestudiante"] == id_estudiante for reg in self.array_dinamico)
+        return en_global or en_evidencias
 
     def guardar_estudiante(self, id_est, nombre, grupo, modo_edit):
         if modo_edit:
@@ -74,7 +96,7 @@ class Director(Evidencias):
                     return True
         else:
             if any(e["id"] == id_est for e in self.estudiantes_global): return False
-            self.estudiantes_global.append({"id": id_est, "nombre": nombre, "grupo": group})
+            self.estudiantes_global.append({"id": id_est, "nombre": nombre, "grupo": grupo})
             return True
 
     def eliminar_estudiante(self, id_est):
@@ -185,15 +207,15 @@ def mostrar_submenu(menu):
         frame_tutores.place(x=40, y=165)
         lbl_ruta.config(text="Tutores Académicos")
     elif menu == "asesores":
-        frame_asesores.place(x=40, y=255)
+        frame_asesores.place(x=40, y=245)
         lbl_ruta.config(text="Asesores Pedagógicos")
         ir_a_asesores_pedagogicos()
     elif menu == "director":
-        frame_director_menu.place(x=40, y=345)
+        frame_director_menu.place(x=40, y=365)
         lbl_ruta.config(text="Director > Panel de Control General")
         ir_a_panel_director()
     elif menu == "ver_grupos":
-        frame_ver_grupos_menu.place(x=40, y=425)
+        frame_ver_grupos_menu.place(x=40, y=445)
         lbl_ruta.config(text="Consulta > Estudiantes por Grupo")
         ir_a_vista_grupos()
 
@@ -207,6 +229,12 @@ def ir_a_asesores_pedagogicos():
     frame_asesores_panel.place(x=275, y=80)
     limpiar_campos_asesor()
     refrescar_tabla_asesores()
+
+def ir_a_reuniones_asesor():
+    ocultar_todos_los_paneles()
+    frame_reuniones_panel.place(x=275, y=80)
+    limpiar_campos_reunion()
+    refrescar_tabla_reuniones()
 
 def volver_al_menu_principal():
     ocultar_todos_los_paneles()
@@ -229,6 +257,7 @@ def ocultar_todos_los_paneles():
     frame_principal.place_forget()
     frame_revision.place_forget()
     frame_asesores_panel.place_forget()
+    frame_reuniones_panel.place_forget()
     frame_director.place_forget()
     frame_ver_grupos.place_forget()
 
@@ -586,7 +615,6 @@ def guardar_observacion_directa():
 def limpiar_campos_asesor():
     txt_obs_directo.delete("1.0", tk.END)
 
-# NUEVO: Acción del Botón Salir (Limpia campos y envía al Menú Principal)
 def salir_y_volver_al_inicio():
     global id_evidencia_asesor_sel
     id_evidencia_asesor_sel = None
@@ -594,8 +622,59 @@ def salir_y_volver_al_inicio():
     if tabla_asesores.selection():
         tabla_asesores.selection_remove(tabla_asesores.selection())
     
-    # Redirección forzada al menú de inicio (Estudiantes)
     mostrar_submenu("estudiantes")
+
+
+# =========================================================================
+# GESTIÓN DE REUNIONES (ASESORES PEDAGÓGICOS) - MODIFICADO CON VALIDACIÓN
+# =========================================================================
+def refrescar_tabla_reuniones():
+    tabla_reuniones.delete(*tabla_reuniones.get_children())
+    for reun in gestor_evidencias.obtener_reuniones():
+        tabla_reuniones.insert("", "end", values=(
+            reun["fecha"],
+            reun["id_estudiante"],
+            reun["tema"],
+            reun["observaciones"]
+        ))
+
+def guardar_nueva_reunion():
+    fecha = ent_reun_fecha.get().strip()
+    id_est = ent_reun_id_est.get().strip()
+    tema = ent_reun_tema.get().strip()
+    obs = txt_reun_obs.get("1.0", tk.END).strip()
+
+    if not fecha or not id_est or not tema or not obs:
+        messagebox.showwarning("Campos incompletos", "Por favor complete todos los campos de la reunión.")
+        return
+
+    try:
+        id_est_num = int(id_est)
+        if id_est_num <= 0: raise ValueError
+    except ValueError:
+        messagebox.showwarning("ID Estudiante Inválido", "El ID del Estudiante debe ser un número entero positivo.")
+        return
+
+    # MODIFICACIÓN CRÍTICA: Validar si el estudiante existe en el sistema
+    if not gestor_evidencias.existe_estudiante(id_est_num):
+        messagebox.showerror(
+            "Estudiante no encontrado", 
+            f"El ID Estudiante {id_est_num} no se encuentra registrado en el sistema.\n"
+            "Debe ser ingresado previamente en la pestaña de estudiantes o por el director."
+        )
+        return
+
+    gestor_evidencias.guardar_reunion(fecha, id_est_num, tema, obs)
+    messagebox.showinfo("Éxito", "Reunión almacenada correctamente.")
+    refrescar_tabla_reuniones()
+    limpiar_campos_reunion()
+
+def limpiar_campos_reunion():
+    ent_reun_fecha.delete(0, tk.END)
+    ent_reun_fecha.insert(0, datetime.now().strftime("%d/%m/%Y"))
+    ent_reun_id_est.delete(0, tk.END)
+    ent_reun_tema.delete(0, tk.END)
+    txt_reun_obs.delete("1.0", tk.END)
 
 
 # ==========================================
@@ -603,6 +682,15 @@ def salir_y_volver_al_inicio():
 # ==========================================
 frame_superior = tk.Frame(ventana, width=1032, height=60, bd=1, relief="solid", bg="white")
 frame_superior.place(x=24, y=10)
+
+try:
+    imagen_logo = tk.PhotoImage(file=r"C:\Users\SALA-2\Downloads\Programacion\logoudi2.png")
+    lbl_logo = tk.Label(frame_superior, image=imagen_logo, bg="white")
+    lbl_logo.image = imagen_logo
+    lbl_logo.place(x=100, y=0)
+except Exception:
+    lbl_logo = tk.Label(frame_superior, text="LOGO", bg="#D9D9D9", font=("Arial", 12, "bold"))
+    lbl_logo.place(x=150, y=10)
 
 lbl_titulo = tk.Label(frame_superior, text="Software ING", font=("Arial", 18, "bold"), bg="white")
 lbl_titulo.place(x=460, y=15)
@@ -620,13 +708,13 @@ btn_tutores = tk.Button(frame_menu, text="Tutores Académicos", bd=0, bg="white"
 btn_tutores.place(x=20, y=140)
 
 btn_asesores = tk.Button(frame_menu, text="Asesores Pedagógicos", bd=0, bg="white", anchor="w", command=lambda: mostrar_submenu("asesores"))
-btn_asesores.place(x=20, y=230)
+btn_asesores.place(x=20, y=220)
 
 btn_director = tk.Button(frame_menu, text="Director General", bd=0, bg="white", font=("Arial", 10, "bold"), fg="darkred", anchor="w", command=lambda: mostrar_submenu("director"))
-btn_director.place(x=20, y=310)
+btn_director.place(x=20, y=330)
 
 btn_ver_grupos = tk.Button(frame_menu, text="Ver por Grupos", bd=0, bg="white", font=("Arial", 10, "bold"), fg="blue", anchor="w", command=lambda: mostrar_submenu("ver_grupos"))
-btn_ver_grupos.place(x=20, y=390)
+btn_ver_grupos.place(x=20, y=410)
 
 frame_estudiantes = tk.Frame(frame_menu, bg="white")
 tk.Label(frame_estudiantes, text="└ Gestión de Evidencias", bg="white").pack(anchor="w")
@@ -638,6 +726,8 @@ btn_sub_revisar.pack(anchor="w")
 frame_asesores = tk.Frame(frame_menu, bg="white")
 btn_sub_obs = tk.Button(frame_asesores, text="└ Evaluar Campo Obs.", bg="white", bd=0, command=ir_a_asesores_pedagogicos)
 btn_sub_obs.pack(anchor="w")
+btn_sub_reuniones = tk.Button(frame_asesores, text="└ Reuniones", bg="white", bd=0, command=ir_a_reuniones_asesor)
+btn_sub_reuniones.pack(anchor="w")
 
 frame_director_menu = tk.Frame(frame_menu, bg="white")
 tk.Label(frame_director_menu, text="└ Panel Global CRUD", fg="darkred", bg="white").pack(anchor="w")
@@ -758,11 +848,11 @@ btn_informe.place(x=15, y=550)
 
 
 # =========================================================================
-# MODIFICADO: PANEL DERECHO 3: ASESORES PEDAGÓGICOS (BOTÓN SALIR REDIRIGIDO)
+# PANEL DERECHO 3: ASESORES PEDAGÓGICOS
 # =========================================================================
 frame_asesores_panel = tk.Frame(ventana, width=780, height=620, bd=1, relief="solid", bg="white")
 
-lbl_as_tit = tk.Label(frame_asesores_panel, text="Panel de Asesores Pedagógicos", font=("Arial", 14, "bold"), bg="white", fg="darkblue")
+lbl_as_tit = tk.Label(frame_asesores_panel, text="Panel de Asesores Pedagógicos", font=("Arial", 14, "bold"), bg="white", fg="#4a90e2")
 lbl_as_tit.place(x=15, y=12)
 
 columnas_as = ("id_evid", "id_est", "nom_est", "nom_evid", "obs_asesor")
@@ -789,15 +879,62 @@ lbl_obs_titulo.place(x=15, y=320)
 txt_obs_directo = tk.Text(frame_asesores_panel, width=91, height=9, bd=1, relief="solid", font=("Arial", 10))
 txt_obs_directo.place(x=15, y=345)
 
-# MODIFICADO: BOTÓN "Salir" REDIRIGE AL MENÚ PRINCIPAL
 btn_as_salir = tk.Button(frame_asesores_panel, text="Salir", width=15, font=("Arial", 10), command=salir_y_volver_al_inicio)
 btn_as_salir.place(x=15, y=530)
 
-btn_as_guardar = tk.Button(frame_asesores_panel, text="Guardar", width=15, font=("Arial", 10, "bold"), bg="#4a90e2", fg="white", command=guardar_observacion_directa)
+btn_as_guardar = tk.Button(frame_asesores_panel, text="Guardar", width=15, font=("Arial", 10, "bold"), command=guardar_observacion_directa)
 btn_as_guardar.place(x=160, y=530)
 
 btn_as_limpiar = tk.Button(frame_asesores_panel, text="Limpiar", width=15, font=("Arial", 10), command=limpiar_campos_asesor)
 btn_as_limpiar.place(x=305, y=530)
+
+
+# =========================================================================
+# PANEL DERECHO 3.5: GESTIÓN DE REUNIONES (ASESOR PEDAGÓGICO)
+# =========================================================================
+frame_reuniones_panel = tk.Frame(ventana, width=780, height=620, bd=1, relief="solid", bg="white")
+
+lbl_reun_tit = tk.Label(frame_reuniones_panel, text="Registro de Reuniones", font=("Arial", 14, "bold"), bg="white", fg="#4a90e2")
+lbl_reun_tit.place(x=15, y=12)
+
+# Formulario de Entrada
+tk.Label(frame_reuniones_panel, text="Fecha (DD/MM/AAAA):", bg="white", font=("Arial", 9, "bold")).place(x=15, y=50)
+ent_reun_fecha = tk.Entry(frame_reuniones_panel, width=15)
+ent_reun_fecha.place(x=160, y=50)
+
+tk.Label(frame_reuniones_panel, text="ID Estudiante:", bg="white", font=("Arial", 9, "bold")).place(x=15, y=85)
+ent_reun_id_est = tk.Entry(frame_reuniones_panel, width=15)
+ent_reun_id_est.place(x=160, y=85)
+
+tk.Label(frame_reuniones_panel, text="Tema de Reunión:", bg="white", font=("Arial", 9, "bold")).place(x=300, y=50)
+ent_reun_tema = tk.Entry(frame_reuniones_panel, width=45)
+ent_reun_tema.place(x=430, y=50)
+
+tk.Label(frame_reuniones_panel, text="Observaciones:", bg="white", font=("Arial", 9, "bold")).place(x=300, y=85)
+txt_reun_obs = tk.Text(frame_reuniones_panel, width=40, height=3, bd=1, relief="solid", font=("Arial", 9))
+txt_reun_obs.place(x=430, y=85)
+
+# Botones de Acción
+btn_reun_guardar = tk.Button(frame_reuniones_panel, text="Guardar Reunión", font=("Arial", 9, "bold"), bg="#4a90e2", fg="white", command=guardar_nueva_reunion)
+btn_reun_guardar.place(x=15, y=130)
+
+btn_reun_limpiar = tk.Button(frame_reuniones_panel, text="Limpiar", font=("Arial", 9), command=limpiar_campos_reunion)
+btn_reun_limpiar.place(x=150, y=130)
+
+# Rejilla (Treeview) para mostrar registros guardados
+columnas_reun = ("fecha", "id_est", "tema", "observaciones")
+tabla_reuniones = ttk.Treeview(frame_reuniones_panel, columns=columnas_reun, show="headings", height=15)
+
+tabla_reuniones.heading("fecha", text="Fecha")
+tabla_reuniones.heading("id_est", text="ID Estudiante")
+tabla_reuniones.heading("tema", text="Tema de la Reunión")
+tabla_reuniones.heading("observaciones", text="Observaciones del Asesor")
+
+tabla_reuniones.column("fecha", width=100, anchor="center")
+tabla_reuniones.column("id_est", width=100, anchor="center")
+tabla_reuniones.column("tema", width=220, anchor="w")
+tabla_reuniones.column("observaciones", width=320, anchor="w")
+tabla_reuniones.place(x=15, y=180)
 
 
 # ==========================================
